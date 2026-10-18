@@ -82,6 +82,45 @@ The generated recipe mounts the workspace as `input` → `/input` (read-only) an
 
 Port: `7340/tcp` (web UI, `/healthz`). The container healthcheck calls `/healthz` with the web UI credentials.
 
+## Chat bridges (Zulip, Discord) — optional, off by default
+
+The image includes two MCPL chat bridges, built from pinned commits (build args `ZULIP_MCP_REF`, `DISCORD_MCPL_REF`) and run with a real Node.js (`/usr/local/bin/node`):
+
+- **Zulip:** [antra-tess/zulip_mcp](https://github.com/antra-tess/zulip_mcp) at `/opt/zulip_mcp` (MIT).
+- **Discord:** [anima-research/discord-mcpl](https://github.com/anima-research/discord-mcpl) at `/opt/discord-mcpl`. zulip_mcp became Zulip-only and its Discord support moved to discord-mcpl, which upstream's onboarding docs use. discord-mcpl has **no license** (like connectome-host).
+
+Like the other recipe settings, these only apply when the recipe is **generated** (first start, or once with `REGENERATE_RECIPE=true`). When a bridge is enabled, the recipe gets an `mcpServers.zulip` and/or `mcpServers.discord` entry, `channelSubscription` for the configured channels, and `modules.wake` policies: DMs, @-mentions and replies (`chat:addressed`) and messages in open bridge channels wake the agent, messages from other bots don't, and everything else keeps upstream's default (`always`). With both bridges off, the recipe is the same as before (no `mcpServers`, no `wake`).
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ZULIP_ENABLED` | `false` | Add the Zulip bridge |
+| `ZULIP_STREAM` | – | Stream(s), comma-separated: subscribed on start (`ZULIP_SUBSCRIBE`), opened (`zulip:<stream>`), and they wake the agent |
+| `ZULIP_RC_PATH` | `/config/.zuliprc` | Bot credentials file |
+| `ZULIP_DM_USERS` | – | Optional DM allowlist (seeds the bridge's filters file) |
+| `DISCORD_ENABLED` | `false` | Add the Discord bridge |
+| `DISCORD_TOKEN` | – | Bot token. Written into the recipe only as `${DISCORD_TOKEN}`, so it is never stored in the file |
+| `DISCORD_GUILD_ID` | – (every server the bot is in) | `serverId` or `serverId:channelId+channelId`, comma-separated. Listed channels are opened and wake the agent |
+| `DISCORD_DM_USERS` | – (anyone) | User IDs allowed to DM the agent |
+| `DISCORD_ADMIN_USERS` | – | User IDs allowed to use `/undo /hide /nudge /unstick` (`allowHostCommands: true`). Also written to `sleep-privileged.json` if that list is still empty (`[]`), so admins can wake the agent while it sleeps |
+
+Where bridge state is kept: Zulip state in `/data/zulip-state`; Discord catch-up watermarks in `/data/discord-watermarks.json`; Discord filters in `/config/discord-filters.json` (created from the variables on first start, and **authoritative after that**: to change the Discord allowlists later, edit or delete that file).
+
+### Zulip bot setup
+
+1. In Zulip, go to *Settings → Personal settings → Bots → Add a new bot*. Choose type **Generic bot**, then create it.
+2. Click the bot's download icon to get its `zuliprc`. It looks like `[api]` / `email=…` / `key=…` / `site=https://….zulipchat.com`.
+3. Save it as `/mnt/user/appdata/connectome/config/.zuliprc`, readable by the container user: `chown 99:100 .zuliprc && chmod 600 .zuliprc`.
+4. Set `ZULIP_ENABLED=true` and `ZULIP_STREAM=<stream>`. On an existing install, also start once with `REGENERATE_RECIPE=true`, then set it back to `false`.
+5. Check the log. The entrypoint warns if Zulip is enabled but `.zuliprc` is missing. Bridge errors appear in the container log and in `/data/sessions/<id>/mcpl-stderr/zulip.log`.
+
+### Discord bot setup
+
+1. In the [Discord Developer Portal](https://discord.com/developers/applications), click *New Application*. On the **Bot** page, *Reset Token* and copy it into `DISCORD_TOKEN`.
+2. On the same page, under *Privileged Gateway Intents*, turn on **Message Content Intent** and **Server Members Intent**. The bridge requests both.
+3. Invite the bot: go to *OAuth2 → URL Generator*, select scopes `bot` and `applications.commands`, and permissions *View Channels*, *Send Messages*, *Send Messages in Threads*, *Read Message History*, *Add Reactions* and *Attach Files*. Open the generated URL and pick your server.
+4. Enable Developer Mode in Discord (*User Settings → Advanced*), then right-click to *Copy ID* for the server, the channels and users. Set `DISCORD_GUILD_ID=<server>:<channel>`, plus `DISCORD_DM_USERS` and `DISCORD_ADMIN_USERS` as wanted.
+5. Set `DISCORD_ENABLED=true`, then regenerate the recipe as above.
+
 ## Build locally
 
 ```bash

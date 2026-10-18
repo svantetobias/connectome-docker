@@ -55,6 +55,23 @@ else
   echo "[entrypoint] using existing /config/recipe.json (provider: $(bun -e 'try{const r=JSON.parse(require("fs").readFileSync("/config/recipe.json","utf8"));console.log(r.agent?.provider??"anthropic")}catch{console.log("unreadable")}'))"
 fi
 RECIPE="${RECIPE:-/config/recipe.json}"
+# Chat bridges
+istrue() { case "$(echo "$1" | tr A-Z a-z)" in true|1|yes|on) return 0;; esac; return 1; }
+if istrue "${ZULIP_ENABLED:-false}"; then
+  ZRC="${ZULIP_RC_PATH:-/config/.zuliprc}"
+  if [ ! -r "$ZRC" ] && [ -z "$ZULIP_API_KEY" ]; then
+    echo "[entrypoint] WARNING: ZULIP_ENABLED=true but $ZRC is missing/unreadable. Download the bot's zuliprc from Zulip (Settings > Personal > Bots) and save it as config/.zuliprc in appdata; the Zulip bridge will fail until then." >&2
+  fi
+  [ -n "$ZULIP_STREAM" ] || echo "[entrypoint] note: ZULIP_STREAM is empty; the agent wakes on Zulip DMs/mentions only." >&2
+fi
+if istrue "${DISCORD_ENABLED:-false}" && [ -z "$DISCORD_TOKEN" ]; then
+  echo "[entrypoint] WARNING: DISCORD_ENABLED=true but DISCORD_TOKEN is empty; the Discord bridge cannot log in." >&2
+fi
+# Discord admins may wake the agent through a sleep window (only seeded into a still-empty list)
+if istrue "${DISCORD_ENABLED:-false}" && [ -n "$DISCORD_ADMIN_USERS" ] && [ "$(tr -d ' \n' < "$SLEEP_PRIVILEGED_FILE")" = "[]" ]; then
+  echo "$DISCORD_ADMIN_USERS" | tr ',' '\n' | sed 's/ //g;/^$/d;s/.*/"&"/' | paste -sd, | sed 's/^/[/;s/$/]/' > "$SLEEP_PRIVILEGED_FILE"
+  echo "[entrypoint] seeded $SLEEP_PRIVILEGED_FILE with DISCORD_ADMIN_USERS"
+fi
 # BASE_URL is a single field for whichever provider is in use: openai-compatible
 # gets it as agent.baseUrl in the generated recipe; the others via upstream's env vars.
 if [ -n "$BASE_URL" ]; then
