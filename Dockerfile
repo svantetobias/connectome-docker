@@ -24,13 +24,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
 WORKDIR /app
 COPY --from=build --chown=bun:bun /app /app
 COPY --chown=bun:bun docker/ /app/docker/
-RUN mkdir -p /data /config && chown -R bun:bun /data /config
+# Files upstream looks up in its working directory (/app, not writable at runtime)
+# are symlinked into /config so they persist and are writable as PUID:PGID.
+RUN mkdir -p /data /config /input && chown -R bun:bun /data /config /input \
+ && for f in mcpl-servers.json mcpl-servers.agent.json; do rm -f "/app/$f"; ln -s "/config/$f" "/app/$f"; done
 ENV DATA_DIR=/data \
     WEBUI_PORT=7340 \
     NODE_ENV=production \
     PUID=99 PGID=100 UMASK=022 PROVIDER=anthropic \
-    HOME=/home/bun
-VOLUME ["/data", "/config"]
+    HOME=/home/bun \
+    SLEEP_PRIVILEGED_FILE=/config/sleep-privileged.json
+VOLUME ["/data", "/config", "/input"]
 EXPOSE 7340
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 CMD ["/app/docker/healthcheck.sh"]
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/docker/entrypoint.sh"]
