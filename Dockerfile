@@ -28,7 +28,7 @@ RUN mkdir -p /data /config && chown -R bun:bun /data /config
 ENV DATA_DIR=/data \
     WEBUI_PORT=7340 \
     NODE_ENV=production \
-    PUID=99 PGID=100 UMASK=022 \
+    PUID=99 PGID=100 UMASK=022 PROVIDER=anthropic \
     HOME=/home/bun
 VOLUME ["/data", "/config"]
 EXPOSE 7340

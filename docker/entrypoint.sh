@@ -28,9 +28,22 @@ fi
 umask "$UMASK"
 export HOME="${HOME:-/home/bun}"
 mkdir -p "$DATA_DIR" /config
+case "$(echo "${REGENERATE_RECIPE:-false}" | tr A-Z a-z)" in
+  true|1|yes)
+    if [ -f /config/recipe.json ]; then
+      bak="/config/recipe.json.bak.$(date +%Y%m%d-%H%M%S)"
+      mv /config/recipe.json "$bak"
+      echo "[entrypoint] REGENERATE_RECIPE=true: backed up old recipe to $bak"
+    fi ;;
+esac
 if [ ! -f /config/recipe.json ]; then
-  echo "[entrypoint] /config/recipe.json missing; installing default recipe"
-  cp /app/docker/default-recipe.json /config/recipe.json
+  echo "[entrypoint] /config/recipe.json missing; generating default recipe for PROVIDER=${PROVIDER:-anthropic}"
+  if ! bun /app/docker/gen-recipe.ts /config/recipe.json; then
+    echo "[entrypoint] recipe generation failed; fix the settings above and restart." >&2
+    exit 1
+  fi
+else
+  echo "[entrypoint] using existing /config/recipe.json (provider: $(bun -e 'try{const r=JSON.parse(require("fs").readFileSync("/config/recipe.json","utf8"));console.log(r.agent?.provider??"anthropic")}catch{console.log("unreadable")}'))"
 fi
 RECIPE="${RECIPE:-/config/recipe.json}"
 [ "$#" -eq 0 ] && set -- "$RECIPE" --headless
