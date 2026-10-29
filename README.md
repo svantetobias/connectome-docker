@@ -1,5 +1,10 @@
 # connectome-docker
 
+> **Archived / no longer maintained.** This repository is archived and the image
+> `ghcr.io/svantetobias/connectome` is no longer rebuilt or updated (the scheduled build
+> workflow is disabled). Existing images remain as-is; use upstream
+> [connectome-host](https://github.com/anima-research/connectome-host) directly.
+
 **Unofficial community Docker image** for [Connectome host](https://github.com/anima-research/connectome-host) by [Anima Labs](https://animalabs.ai/connectome). It runs a persistent, stateful AI agent from a JSON recipe, with long-term memory and a web operator console.
 
 > ⚠️ This is not an official Anima Labs project, and they don't support it.
